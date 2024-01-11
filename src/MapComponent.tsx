@@ -1,120 +1,173 @@
-// MapComponent.js
-import { loadModules } from "esri-loader";
-import { useEffect, useRef } from "react";
+// MapComponent.tsx
+import React, {
+  Dispatch,
+  SetStateAction,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import Map from "@arcgis/core/Map.js";
+import MapView from "@arcgis/core/views/MapView.js";
+import Graphic from "@arcgis/core/Graphic";
+import Point from "@arcgis/core/geometry/Point";
+import "@arcgis/core/assets/esri/themes/light/main.css";
+import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
+import RouteLayer from "@arcgis/core/layers/RouteLayer.js";
+import Stop from "@arcgis/core/rest/support/Stop.js";
 import { Store } from "./components/apiTypes";
+import { API_KEY } from "./constants";
 
 interface MapComponentProps {
   stores: Store[];
   selectedJudet: string | null;
+  setUserLocation: Dispatch<SetStateAction<Point | null>>;
+  nearestStore: Store | null;
+  userLocation: Point | null;
 }
 
-function MapComponent({ stores, selectedJudet }: MapComponentProps) {
+const MapComponent: React.FC<MapComponentProps> = ({
+  stores,
+  selectedJudet,
+  setUserLocation,
+  nearestStore,
+  userLocation,
+}) => {
   const mapRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<MapView | null>(null);
 
   useEffect(() => {
-    // Load the ArcGIS API modules
-    loadModules(
-      [
-        "esri/Map",
-        "esri/views/MapView",
-        "esri/Graphic",
-        "esri/geometry/Point",
-        "esri/tasks/RouteTask",
-        "esri/tasks/support/RouteParameters",
-        "esri/tasks/support/FeatureSet",
-      ],
-      { css: true }
-    )
-      .then(
-        ([
-          Map,
-          MapView,
-          Graphic,
-          Point,
-          // RouteTask,
-          // RouteParameters,
-          // FeatureSet,
-        ]) => {
-          const map = new Map({ basemap: "streets" });
-          const view = new MapView({
-            container: mapRef.current,
-            map,
-            center: [24.9668, 45.9432],
-            zoom: 7,
-          });
-          let filtered_stores: Store[] = [];
+    const map = new Map({ basemap: "streets" });
+    const mapView = new MapView({
+      container: mapRef.current!,
+      map,
+      center: [24.9668, 45.9432],
+      zoom: 6,
+    });
+    setView(mapView);
 
-          // Add a button for displaying the user's current location
-          const locateButton = document.createElement("button");
-          locateButton.innerHTML = "+";
-          locateButton.classList.add(
-            "esri-widget",
-            "esri-widget--button",
-            "esri-interactive"
-          );
-          locateButton.addEventListener("click", () => {
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(
-                (position) => {
-                  const { latitude, longitude } = position.coords;
-                  const userLocation = new Point({ x: longitude, y: latitude });
-                  view.goTo({ target: userLocation, zoom: 12 });
+    let filtered_stores: Store[] = [];
+    if (selectedJudet) {
+      filtered_stores = stores.filter((store) => {
+        console.log(store.data.judet, selectedJudet);
+        return store.data.judet === selectedJudet;
+      });
+    }
+
+    if (!view) return;
+    (selectedJudet ? filtered_stores : stores).forEach((store) => {
+      const storeLong = store.data.location.longitude;
+      const storeLat = store.data.location.latitude;
+      const storeAddress = store.data.address;
+      const storeJudet = store.data.judet;
+      const storeName = store.data.name;
+      const storeSchedule = `${store.data.opening_hours} - ${store.data.closing_hours}`;
+      const storeRating = store.data.rating;
+
+      const graphicsLayer = new GraphicsLayer();
+      mapView.map.add(graphicsLayer);
+
+      const point = new Point({
+        longitude: storeLong,
+        latitude: storeLat,
+      });
+
+      const simpleMarkerSymbol = {
+        type: "simple-marker",
+        color: [226, 0, 0],
+        outline: {
+          color: [255, 255, 255],
+          width: 1,
+        },
+      };
+
+      const pointGraphic = new Graphic({
+        geometry: point,
+        symbol: simpleMarkerSymbol,
+        attributes: {
+          Name: storeName,
+          Address: storeAddress,
+          Schedule: storeSchedule,
+          Rating: storeRating,
+          Judet: storeJudet,
+        },
+        popupTemplate: {
+          title: "{Name}",
+          content: [
+            {
+              type: "fields",
+              fieldInfos: [
+                {
+                  fieldName: "Address",
                 },
-                (error) => console.error("Error getting user location:", error)
-              );
-            } else {
-              console.error("Geolocation is not supported by this browser.");
-            }
-          });
-
-          view.ui.add(locateButton, "top-left");
-
-          if (selectedJudet) {
-            // eslint-disable-next-line no-param-reassign
-            filtered_stores = stores.filter((store) => {
-              console.log(store.data.judet, selectedJudet);
-              return store.data.judet === selectedJudet;
-            });
-          }
-          // console.log(stores, selectedJudet);
-
-          (selectedJudet ? filtered_stores : stores).forEach((store, index) => {
-            const storeLong = store.data.location.longitude;
-            const storeLat = store.data.location.latitude;
-            const storeAddress = store.data.address;
-            const storeJudet = store.data.judet;
-            const storeName = store.data.name;
-            const storeSchedule = `${store.data.opening_hours} - ${store.data.closing_hours}`;
-            const storeRating = store.data.rating;
-
-            const graphic = new Graphic({
-              geometry: new Point({
-                x: storeLong,
-                y: storeLat,
-              }),
-              symbol: {
-                type: "simple-marker",
-                color: [255, 0, 0],
-                outline: {
-                  color: [255, 255, 255],
-                  width: 2,
+                {
+                  fieldName: "Schedule",
                 },
-              },
-              attributes: { ObjectID: index + 1 },
-              popupTemplate: {
-                title: "Store Information",
-                content: `<p>Name: ${storeName}</p><p>Adress: ${storeAddress}, ${storeJudet}</p><p>Schedule: ${storeSchedule}</p><p>Rating: ${storeRating} / 5</p>`,
-              },
+                {
+                  fieldName: "Rating",
+                },
+                {
+                  fieldName: "Judet",
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      graphicsLayer.add(pointGraphic);
+    });
+
+    // Add a button for displaying the user's current location
+    const locateButton = document.createElement("button");
+    locateButton.innerHTML = "+";
+    locateButton.classList.add(
+      "esri-widget",
+      "esri-widget--button",
+      "esri-interactive"
+    );
+    locateButton.addEventListener("click", () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            const userLoc = new Point({ x: longitude, y: latitude });
+            setUserLocation(userLoc);
+            mapView.goTo({
+              target: userLoc,
+              zoom: 12,
             });
 
-            view.graphics.add(graphic);
-          });
-        }
-      )
-      .catch((err) => console.error("Error loading ArcGIS modules:", err));
+            // Call the function to find and display the route
+            // findAndDisplayRoute(userLocation);
+          },
+          (error) => console.error("Error getting user location:", error)
+        );
+      } else {
+        console.error("Geolocation is not supported by this browser.");
+      }
+    });
+
+    mapView.ui.add(locateButton, "top-left");
+
+    (async () => {
+      /* Route to nearest store */
+      if (!userLocation || !nearestStore) return;
+      const stops = [
+        new Stop({ geometry: userLocation }),
+        new Stop({ geometry: nearestStore.data.location }),
+      ];
+      const routeLayer = new RouteLayer({ stops });
+      mapView.map.add(routeLayer);
+      const results = await routeLayer.solve({ apiKey: API_KEY });
+      routeLayer.update(results);
+
+      // Zoom to the extent of the solve route.
+      view.goTo(routeLayer.routeInfo.geometry);
+    })();
   }, [stores, selectedJudet]);
 
-  return <div ref={mapRef} className="h-[800px]" />;
-}
+  return <div ref={mapRef} style={{ height: "750px" }} />;
+};
 
 export default MapComponent;

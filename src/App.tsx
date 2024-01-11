@@ -1,3 +1,4 @@
+import Point from "@arcgis/core/geometry/Point";
 import { child, get, ref } from "firebase/database";
 import { useEffect, useState } from "react";
 import MapComponent from "./MapComponent";
@@ -9,6 +10,8 @@ function App() {
   const [selectedJudet, seSelectedJudet] = useState<string | null>(null);
   const [shouldDisplayStores, setShouldDisplayStores] =
     useState<boolean>(false);
+  const [userLocation, setUserLocation] = useState<Point | null>(null);
+  const [nearestStore, setNearestStore] = useState<Store | null>(null);
 
   /* Fetches the stores information from Firebase */
   useEffect(() => {
@@ -37,6 +40,56 @@ function App() {
     }
     return acc;
   }, []);
+
+  const findNearestStore = () => {
+    let userLoc = userLocation;
+    if (userLoc === null) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          userLoc = new Point({ x: longitude, y: latitude });
+          setUserLocation(userLoc);
+
+          // Call the function to find and display the route
+          // findAndDisplayRoute(userLocation);
+        },
+        (error) => console.error("Error getting user location:", error)
+      );
+    }
+    if (!userLoc) return;
+
+    const userLong = userLoc.longitude;
+    const userLat = userLoc.latitude;
+
+    const nrstStore = stores.reduce((acc: Store | null, store) => {
+      const storeLong = store.data.location.longitude;
+      const storeLat = store.data.location.latitude;
+
+      const distance = Math.sqrt(
+        (userLong - storeLong) ** 2 + (userLat - storeLat) ** 2
+      );
+
+      if (!acc) {
+        acc = store;
+      } else {
+        const accLong = acc.data.location.longitude;
+        const accLat = acc.data.location.latitude;
+
+        const accDistance = Math.sqrt(
+          (userLong - accLong) ** 2 + (userLat - accLat) ** 2
+        );
+
+        if (distance < accDistance) {
+          acc = store;
+        }
+      }
+
+      return acc;
+    }, null);
+
+    setNearestStore(nrstStore);
+    console.log(nrstStore);
+  };
 
   return (
     <div>
@@ -68,7 +121,7 @@ function App() {
         <button
           type="button"
           className="p-2 mb-2 border-black border-2"
-          onClick={() => null}
+          onClick={() => findNearestStore()}
         >
           Route to nearest store
         </button>
@@ -76,6 +129,9 @@ function App() {
       <MapComponent
         stores={shouldDisplayStores ? stores : []}
         selectedJudet={selectedJudet}
+        setUserLocation={setUserLocation}
+        userLocation={userLocation}
+        nearestStore={nearestStore}
       />
     </div>
   );

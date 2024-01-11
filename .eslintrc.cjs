@@ -50,7 +50,7 @@ module.exports = {
         'no-console': 'error',
         'import/no-extraneous-dependencies': ['error', { devDependencies: true }],
         'import/prefer-default-export': 0,
-        'no-param-reassign': ['error', { props: true, ignorePropertyModificationsFor: ['state'] }],
+        'no-param-reassign': 0,
         'no-shadow': 'off',
         'no-console': 'off',
         '@typescript-eslint/no-shadow': ['error'],
