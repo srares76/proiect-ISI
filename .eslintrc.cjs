@@ -32,9 +32,12 @@ module.exports = {
         'react/require-default-props': 'off',
         'react/jsx-uses-react': 'off',
         'react/react-in-jsx-scope': 'off',
+        'react/function-component-definition': 'off',
+        'camelcase': 'off',
         '@typescript-eslint/explicit-module-boundary-types': 'off',
         indent: 0,
         'react/jsx-filename-extension': [2, { extensions: ['.js', '.jsx', '.ts', '.tsx'] }],
+        'no-new': 0,
         'prettier/prettier': [
             'error',
             {
