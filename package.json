@@ -13,6 +13,7 @@
     "@arcgis/core": "^4.28.10",
     "esri-loader": "^3.7.0",
     "firebase": "^10.7.1",
+    "firebase-auth": "^0.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-firebase-hooks": "^5.1.1"

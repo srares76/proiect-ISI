@@ -1,27 +1,48 @@
 import Point from "@arcgis/core/geometry/Point";
 import { child, get, ref } from "firebase/database";
 import { useEffect, useState } from "react";
+import { signOut } from "firebase/auth";
 import MapComponent from "./MapComponent";
-import { Store } from "./components/apiTypes";
-import { db } from "./firebase";
+import { Store } from "./apiTypes";
+import { auth, db } from "./firebase";
+import useAuth from "./components/useAuth";
 
 function App() {
   const [stores, setStores] = useState<Store[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+
   const [selectedJudet, seSelectedJudet] = useState<string | null>(null);
   const [shouldDisplayStores, setShouldDisplayStores] =
     useState<boolean>(false);
+  const [shouldDisplayFavorites, setShouldDisplayFavorites] =
+    useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<Point | null>(null);
   const [nearestStore, setNearestStore] = useState<Store | null>(null);
+
+  console.log(favorites);
+
+  const { user } = useAuth();
 
   /* Fetches the stores information from Firebase */
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const dataRef = ref(db, "kaufland_stores");
-        const snapshot = await get(child(dataRef, "/"));
+        /* Stores data */
+        const storesRef = ref(db, "kaufland_stores");
+        const storesSnapshot = await get(child(storesRef, "/"));
 
-        if (snapshot.exists()) {
-          setStores(snapshot.val());
+        if (storesSnapshot.exists()) {
+          setStores(storesSnapshot.val());
+        } else {
+          console.log("No data available");
+        }
+
+        /* Favorites data */
+        const favoritesData = ref(db, `userProfiles/${user!.uid}/favorites}`);
+        const favoritesSnapshot = await get(child(favoritesData, "/"));
+
+        if (favoritesSnapshot.exists()) {
+          setFavorites(favoritesSnapshot.val());
         } else {
           console.log("No data available");
         }
@@ -31,6 +52,7 @@ function App() {
     };
 
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const judete = stores.reduce((acc: string[], store) => {
@@ -49,14 +71,13 @@ function App() {
           const { latitude, longitude } = position.coords;
           userLoc = new Point({ x: longitude, y: latitude });
           setUserLocation(userLoc);
-
-          // Call the function to find and display the route
-          // findAndDisplayRoute(userLocation);
         },
         (error) => console.error("Error getting user location:", error)
       );
     }
-    if (!userLoc) return;
+    if (!userLoc) {
+      return;
+    }
 
     const userLong = userLoc.longitude;
     const userLat = userLoc.latitude;
@@ -91,17 +112,47 @@ function App() {
     console.log(nrstStore);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Sign-out failed", error);
+    }
+  };
+
+  // eslint-disable-next-line no-nested-ternary
+  const storesToDisplay = shouldDisplayStores
+    ? shouldDisplayFavorites
+      ? favorites.map(
+          (fav) => stores.find((store) => store.store_id.toString() === fav)!
+        )
+      : stores
+    : [];
+
   return (
     <div>
-      <div className="flex gap-4">
+      <div className="ml-4 mt-2 flex gap-4">
         <button
           type="button"
-          className="p-2 mb-2 border-black border-2"
+          className={`p-2 mb-2 border-black border-2 ${
+            shouldDisplayStores ? "bg-green-500" : ""
+          }`}
           onClick={() => {
             setShouldDisplayStores((prev) => !prev);
           }}
         >
-          Display stores
+          Display all stores
+        </button>
+        <button
+          type="button"
+          className={`p-2 mb-2 border-black border-2 ${
+            shouldDisplayFavorites ? "bg-green-500" : ""
+          }`}
+          onClick={() => {
+            setShouldDisplayFavorites((prev) => !prev);
+          }}
+        >
+          Display favorites
         </button>
         <select
           className="p-2 mb-2 border-black border-2"
@@ -125,9 +176,18 @@ function App() {
         >
           Route to nearest store
         </button>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="p-2 mb-2 border-black border-2"
+        >
+          Log out
+        </button>
       </div>
       <MapComponent
-        stores={shouldDisplayStores ? stores : []}
+        stores={storesToDisplay}
+        favorites={favorites}
+        setFavorites={setFavorites}
         selectedJudet={selectedJudet}
         setUserLocation={setUserLocation}
         userLocation={userLocation}
